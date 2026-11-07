@@ -125,15 +125,8 @@ export default function App() {
     setView("public");
   };
 
-  if (!isAuthenticated && view === "login") {
-    return (
-      <Login
-        onBackToPublic={() => setView("public")}
-      />
-    );
-  }
-
-  const showHome = !isAuthenticated || view === "public";
+  const showLogin = !isAuthenticated && view === "login";
+  const showHome = !showLogin && (!isAuthenticated || view === "public");
 
   return (
     <div className="admin-shell">
@@ -141,7 +134,7 @@ export default function App() {
         onHome={() => setView("public")}
         onAccess={() => setView(isAuthenticated ? "admin" : "login")}
         onLogout={handleLogout} />
-      {showHome ? <PublicHome /> : (
+      {showLogin ? <Login onBackToPublic={() => setView("public")} /> : showHome ? <PublicHome /> : (
         <AdminShell page={page} setPage={setPage}>
           {listError && (
             <p role="alert" className="mb-4 text-sm text-red-700">

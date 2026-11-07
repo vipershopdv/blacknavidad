@@ -53,6 +53,7 @@ export default function SiteHeader({ user, isHome, onHome, onAccess, onLogout })
           </button>
           {user && open && (
             <div id="admin-account-menu" className="admin-account-menu">
+              <p className="admin-account-menu-name">{name}</p>
               {isHome && (
                 <button type="button" onClick={() => { setOpen(false); onAccess(); }}>
                   <LuLayoutDashboard aria-hidden="true" /> Panel administrador
