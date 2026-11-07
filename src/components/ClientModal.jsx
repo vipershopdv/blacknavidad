@@ -1,44 +1,40 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { LuCheck, LuPencil, LuPrinter, LuReceiptText, LuSave, LuX } from "react-icons/lu";
+import OrderDetails from "./OrderDetails";
+import { statusLabels } from "../data/orderDisplay";
 
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-
-import {
-  faCheck,
-  faPen,
-  faPrint,
-  faXmark,
-} from "@fortawesome/free-solid-svg-icons";
-
-export default function ClientModal({
-  client,
-  onClose,
-  updateClientStatus,
-  updateClient,
-  printClientTicket,
-}) {
-  const [editing, setEditing] = useState(false);
+export default function ClientModal({ client, onClose, updateClient, printClientTicket }) {
+  const [mode, setMode] = useState("details");
   const [formData, setFormData] = useState(client);
-  const [confirmDelivery, setConfirmDelivery] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
 
   if (!client) return null;
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
+  const editing = mode === "edit";
+  const confirming = mode === "deliver";
+  const changeMode = (nextMode) => {
+    setError("");
+    setMode(nextMode);
   };
 
-  const handleSave = async () => {
-    const total = Number(formData.total || 0);
-    const adelanto = Number(formData.adelanto || 0);
-    const fuentes = Number(formData.fuentes || 0);
+  const handleSave = async (event) => {
+    event.preventDefault();
+    if (!editing || saving) return;
+    const total = Number(formData.total);
+    const adelanto = Number(formData.adelanto);
+    if (adelanto > total) {
+      setError("El adelanto no puede superar el total.");
+      return;
+    }
 
-    if (saving) return;
     setError("");
     setSaving(true);
     try {
@@ -46,11 +42,11 @@ export default function ClientModal({
         nombre: formData.nombre,
         contenido: formData.contenido,
         whatsapp: formData.whatsapp,
-        fuentes,
+        fuentes: Number(formData.fuentes),
         total,
         adelanto,
       });
-      setEditing(false);
+      changeMode("details");
     } catch {
       setError("No se pudo guardar el pedido. Revisa los datos e intenta de nuevo.");
     } finally {
@@ -58,21 +54,12 @@ export default function ClientModal({
     }
   };
 
-  const canEdit = client.estado === "espera";
-
-  const handleStatus = async (estado) => {
+  const handleDelivery = async () => {
     if (saving) return;
     setError("");
     setSaving(true);
     try {
-      if (estado === "entregado") {
-        await updateClient(client.id, {
-          estado: "entregado",
-          adelanto: Number(client.total || 0),
-        });
-      } else {
-        await updateClientStatus(client.id, estado);
-      }
+      await updateClient(client.id, { estado: "entregado", adelanto: Number(client.total || 0) });
       onClose();
     } catch {
       setError("No se pudo actualizar el estado. Intenta de nuevo.");
@@ -81,374 +68,70 @@ export default function ClientModal({
     }
   };
 
-  const handlePrint = () => {
-    printClientTicket(client);
-  };
-
-  const inputClassName = `
-    mt-1.5
-    w-full
-    rounded-xl
-    border
-    border-slate-200
-    bg-white
-    px-3
-    py-2.5
-    text-sm
-    outline-none
-    focus:border-sky-300
-    focus:ring-4
-    focus:ring-sky-100
-  `;
-
   return (
-    <div
-      className="
-        fixed
-        inset-0
-        z-50
-        flex
-        items-center
-        justify-center
-        bg-slate-950/35
-        p-2
-        backdrop-blur-sm
-        sm:p-3
-      "
-    >
-      <div
-        className="
-          max-h-[calc(100svh-16px)]
-          w-full
-          max-w-[430px]
-          overflow-y-auto
-          rounded-[26px]
-          bg-white
-          p-3
-          shadow-[0_30px_100px_rgba(15,23,42,0.25)]
-          sm:max-h-[calc(100svh-24px)]
-          sm:max-w-lg
-          sm:p-5
-        "
-      >
-        <div className="mb-3 flex items-start justify-between gap-3 sm:mb-5">
-          <div className="min-w-0">
-            <h2 className="truncate text-2xl font-black text-slate-900 sm:text-3xl">
-              {client.id}
-            </h2>
-
-            <p className="mt-0.5 text-xs font-medium text-slate-500 sm:text-sm">
-              Información del pedido
-            </p>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="
-              flex
-              h-9
-              w-9
-              shrink-0
-              items-center
-              justify-center
-              rounded-full
-              bg-slate-100
-              text-slate-500
-              transition
-              hover:bg-slate-200
-            "
-            aria-label="Cerrar modal"
-          >
-            <FontAwesomeIcon icon={faXmark} />
-          </button>
-        </div>
-
-        <div className="space-y-2.5 sm:space-y-3">
-          <div className="rounded-2xl bg-slate-50 p-3 sm:p-4">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:text-xs">
-              Cliente
-            </p>
-
-            {editing ? (
-              <input
-                type="text"
-                name="nombre"
-                value={formData.nombre || ""}
-                onChange={handleChange}
-                className={inputClassName}
-              />
-            ) : (
-              <h3 className="mt-1.5 text-lg font-black text-slate-900 sm:text-xl">
-                {client.nombre}
-              </h3>
-            )}
-          </div>
-
-          <div className="rounded-2xl bg-slate-50 p-3 sm:p-4">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:text-xs">
-              Contenido
-            </p>
-
-            {editing ? (
-              <input
-                type="text"
-                name="contenido"
-                value={formData.contenido || ""}
-                onChange={handleChange}
-                className={inputClassName}
-              />
-            ) : (
-              <p className="mt-1.5 text-sm font-semibold text-slate-700 sm:text-base">
-                {client.contenido}
-              </p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-            <div className="rounded-2xl bg-slate-50 p-3 sm:p-4">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:text-xs">
-                Fuentes
-              </p>
-
-              {editing ? (
-                <input
-                  type="number"
-                  name="fuentes"
-                  value={formData.fuentes || ""}
-                  onChange={handleChange}
-                  className={inputClassName}
-                />
-              ) : (
-                <h3 className="mt-1.5 text-xl font-black text-slate-900 sm:text-2xl">
-                  {client.fuentes}
-                </h3>
-              )}
-            </div>
-
-            <div className="rounded-2xl bg-slate-50 p-3 sm:p-4">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:text-xs">
-                Total
-              </p>
-
-              {editing ? (
-                <input
-                  type="number"
-                  name="total"
-                  value={formData.total || ""}
-                  onChange={handleChange}
-                  className={inputClassName}
-                />
-              ) : (
-                <h3 className="mt-1.5 text-xl font-black text-emerald-600 sm:text-2xl">
-                  S/{client.total}
-                </h3>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-            <div className="rounded-2xl bg-slate-50 p-3 sm:p-4">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:text-xs">
-                Adelanto
-              </p>
-
-              {editing ? (
-                <input
-                  type="number"
-                  name="adelanto"
-                  value={formData.adelanto || ""}
-                  onChange={handleChange}
-                  className={inputClassName}
-                />
-              ) : (
-                <h3 className="mt-1.5 text-xl font-black text-slate-900 sm:text-2xl">
-                  S/{client.adelanto}
-                </h3>
-              )}
-            </div>
-
-            <div className="rounded-2xl bg-orange-50 p-3 sm:p-4">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-orange-500 sm:text-xs">
-                Debe
-              </p>
-
-              <h3 className="mt-1.5 text-2xl font-black text-orange-600 sm:text-3xl">
-                S/{Number(formData.total || 0) - Number(formData.adelanto || 0)}
-              </h3>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-slate-50 p-3 sm:p-4">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:text-xs">
-              WhatsApp
-            </p>
-
-            {editing ? (
-              <input
-                type="text"
-                name="whatsapp"
-                value={formData.whatsapp || ""}
-                onChange={handleChange}
-                className={inputClassName}
-              />
-            ) : (
-              <h3 className="mt-1.5 text-base font-black text-slate-900 sm:text-lg">
-                {client.whatsapp}
-              </h3>
-            )}
+    <dialog ref={dialogRef} aria-labelledby="order-dialog-title" className="admin-dialog"
+      onCancel={(event) => {
+        event.preventDefault();
+        if (saving) return;
+        if (mode === "details") onClose();
+        else changeMode("details");
+      }}>
+      <header className="admin-dialog-header">
+        <div className="admin-dialog-title">
+          <span className="admin-dialog-symbol">{confirming ? <LuCheck aria-hidden="true" /> : <LuReceiptText aria-hidden="true" />}</span>
+          <div>
+            <h2 id="order-dialog-title">{confirming ? "Confirmar entrega" : editing ? `Editar pedido ${client.id}` : `Pedido ${client.id}`}</h2>
+            {!confirming && <span className="admin-status-badge" data-status={client.estado}>{statusLabels[client.estado]}</span>}
           </div>
         </div>
+        <button type="button" className="admin-icon-button admin-button-secondary" aria-label="Cerrar modal"
+          disabled={saving} onClick={onClose}><LuX aria-hidden="true" /></button>
+      </header>
 
-        <div className="mt-3 grid grid-cols-2 gap-2.5 sm:mt-5 sm:gap-3">
-          {canEdit && (
-            <button
-              onClick={() => {
-                if (editing) {
-                  handleSave();
-                } else {
-                  setError("");
-                  setFormData(client);
-                  setEditing(true);
-                }
-              }}
-              className="
-                inline-flex
-                items-center
-                justify-center
-                rounded-2xl
-                bg-blue-600
-                px-4
-                py-3
-                text-sm
-                font-bold
-                text-white
-                sm:py-4
-              "
-            >
-              <FontAwesomeIcon icon={faPen} className="mr-2" />
-              {editing ? (saving ? "Guardando..." : "Guardar") : "Editar"}
+      {confirming ? (
+        <>
+          <p className="admin-dialog-message">El pedido {client.id} quedará entregado y su saldo pasará a S/ 0.00.</p>
+          {error && <p role="alert" className="admin-dialog-error">{error}</p>}
+          <footer className="admin-dialog-actions">
+            <button type="button" className="admin-button admin-button-secondary" disabled={saving}
+              onClick={() => changeMode("details")}>Cancelar</button>
+            <button type="button" className="admin-button admin-button-primary" disabled={saving} onClick={handleDelivery}>
+              <LuCheck aria-hidden="true" /> {saving ? "Guardando..." : "Confirmar entrega"}
             </button>
-          )}
-
-          <button
-            onClick={handlePrint}
-            className={`
-              inline-flex
-              items-center
-              justify-center
-              rounded-2xl
-              bg-slate-900
-              px-4
-              py-3
-              text-sm
-              font-bold
-              text-white
-              ${canEdit ? "" : "col-span-2"}
-              sm:py-4
-            `}
-          >
-            <FontAwesomeIcon icon={faPrint} className="mr-2" />
-            Imprimir
-          </button>
-
-          {client.estado === "listo" && (
-            <button
-              onClick={() => { setError(""); setConfirmDelivery(true); }}
-              className="
-                col-span-2
-                inline-flex
-                items-center
-                justify-center
-                rounded-2xl
-                bg-orange-500
-                px-4
-                py-3
-                text-sm
-                font-bold
-                text-white
-                sm:py-4
-              "
-            >
-              <FontAwesomeIcon icon={faCheck} className="mr-2" />
-              Marcar entregado
-            </button>
-          )}
-        </div>
-        {error && !confirmDelivery && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
-      </div>
-
-      {confirmDelivery && (
-        <div
-          className="
-            fixed
-            inset-0
-            z-[60]
-            flex
-            items-center
-            justify-center
-            bg-black/30
-            p-4
-          "
-        >
-          <div
-            className="
-              w-full
-              max-w-md
-              rounded-3xl
-              bg-white
-              p-6
-              shadow-[0_30px_100px_rgba(15,23,42,0.25)]
-            "
-          >
-            <h3 className="text-2xl font-black text-slate-900">
-              Confirmacion
-            </h3>
-
-            <p className="mt-3 text-slate-600">
-              Seguro que deseas marcar este pedido como entregado?
-            </p>
-
-            <p className="mt-2 text-sm font-semibold text-orange-600">
-              El debe pasara a S/0 y el adelanto sera igual al total.
-            </p>
-            {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
-
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={() => setConfirmDelivery(false)}
-                disabled={saving}
-                className="
-                  flex-1
-                  rounded-2xl
-                  bg-slate-100
-                  px-5
-                  py-3
-                  font-bold
-                  text-slate-700
-                "
-              >
-                Cancelar
-              </button>
-
-              <button
-                onClick={() => handleStatus("entregado")}
-                disabled={saving}
-                className="
-                  flex-1
-                  rounded-2xl
-                  bg-orange-500
-                  px-5
-                  py-3
-                  font-bold
-                  text-white
-                "
-              >
-                {saving ? "Guardando..." : "Confirmar"}
-              </button>
-            </div>
-          </div>
-        </div>
+          </footer>
+        </>
+      ) : (
+        <form onSubmit={handleSave}>
+          <OrderDetails client={client} formData={editing ? formData : null}
+            onChange={({ target }) => setFormData({ ...formData, [target.name]: target.value })} />
+          {error && <p role="alert" className="admin-dialog-error">{error}</p>}
+          <footer className="admin-dialog-actions" key={mode}>
+            {editing ? (
+              <>
+                <button type="button" className="admin-button admin-button-secondary" disabled={saving}
+                  onClick={() => changeMode("details")}>Cancelar</button>
+                <button className="admin-button admin-button-primary" disabled={saving}>
+                  <LuSave aria-hidden="true" /> {saving ? "Guardando..." : "Guardar"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="admin-button admin-button-secondary" onClick={() => printClientTicket(client)}>
+                  <LuPrinter aria-hidden="true" /> Imprimir
+                </button>
+                {client.estado === "espera" && <button type="button" className="admin-button admin-button-primary"
+                  onClick={() => { setFormData(client); changeMode("edit"); }}>
+                  <LuPencil aria-hidden="true" /> Editar
+                </button>}
+                {client.estado === "listo" && <button type="button" className="admin-button admin-button-primary"
+                  onClick={() => changeMode("deliver")}>
+                  <LuCheck aria-hidden="true" /> Marcar entregado
+                </button>}
+              </>
+            )}
+          </footer>
+        </form>
       )}
-    </div>
+    </dialog>
   );
 }

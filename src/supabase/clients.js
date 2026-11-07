@@ -75,6 +75,9 @@ export const getClientByCode = async (code) => {
   }
 };
 
+export const getNextOrderCode = async (signal) =>
+  unwrap(await supabase.rpc("admin_next_order_code").abortSignal(signal));
+
 export const createClient = async (client) =>
   toClient(unwrap(await supabase.from("clients").insert(pickFields(client, editable))
     .select("*").single()));

@@ -1,13 +1,11 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 import { faWhatsapp } from "@fortawesome/free-brands-svg-icons";
-
-const formatMoney = (value) => `S/${Number(value || 0)}`;
+import { LuChevronRight, LuLayers } from "react-icons/lu";
+import { formatMoney } from "../data/orderDisplay";
 
 export default function ClientCard({ client, onClick }) {
-  const sendWhatsApp = (e) => {
-    e.stopPropagation();
-
+  const sendWhatsApp = () => {
     if (!client?.whatsapp) return;
 
     const message = `Hola ${client?.nombre ?? ""};
@@ -32,113 +30,38 @@ Gracias por su preferencia.
 
     window.open(
       `https://wa.me/${client.whatsapp}?text=${encodeURIComponent(message)}`,
-      "_blank"
+      "_blank",
+      "noopener,noreferrer"
     );
   };
 
-  const styles = {
-    espera: {
-      id: "text-blue-700",
-      line: "bg-blue-500",
-      badge: "bg-blue-50 text-blue-700",
-      hover: "hover:border-blue-200",
-    },
-    listo: {
-      id: "text-emerald-700",
-      line: "bg-emerald-500",
-      badge: "bg-emerald-50 text-emerald-700",
-      hover: "hover:border-emerald-200",
-    },
-    atendido: {
-      id: "text-red-700",
-      line: "bg-red-500",
-      badge: "bg-red-50 text-red-700",
-      hover: "hover:border-red-200",
-    },
-    entregado: {
-      id: "text-red-700",
-      line: "bg-red-500",
-      badge: "bg-red-50 text-red-700",
-      hover: "hover:border-red-200",
-    },
-  };
-
-  const current = styles[client?.estado] ?? styles.espera;
   const debe = Number(client?.debe || 0);
+  const fuentes = client?.fuentes ?? 0;
+  const showWhatsApp = client?.estado === "listo" && client?.whatsapp;
 
   return (
-    <article
-      onClick={onClick}
-      className={`
-        relative
-        cursor-pointer
-        overflow-hidden
-        rounded-[18px]
-        border
-        border-slate-100
-        bg-white
-        px-3
-        py-3
-        shadow-sm
-        transition-all
-        duration-200
-        hover:-translate-y-0.5
-        hover:shadow-md
-        ${current.hover}
-      `}
-    >
-      <div className={`absolute left-0 top-0 h-full w-[4px] ${current.line}`} />
-
-      <div className="flex items-start gap-3 pl-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className={`text-2xl font-black leading-none tracking-tight ${current.id}`}>
-              {client?.id}
-            </h2>
-
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${current.badge}`}>
-              {client?.fuentes ?? 0} fuentes
-            </span>
-          </div>
-
-          <p className="mt-1 truncate text-sm font-semibold text-slate-800">
-            {client?.nombre}
-          </p>
-        </div>
-
-        {client?.estado === "listo" && client?.whatsapp && (
-          <button
-            onClick={sendWhatsApp}
-            className="
-              flex
-              h-8
-              w-8
-              shrink-0
-              items-center
-              justify-center
-              rounded-xl
-              bg-green-50
-              text-sm
-              text-green-500
-              transition
-              hover:bg-green-100
-            "
-            aria-label="Enviar WhatsApp"
-          >
-            <FontAwesomeIcon icon={faWhatsapp} />
-          </button>
-        )}
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 pl-2 text-xs font-semibold">
-        <span className="text-emerald-700">
-          Total: {formatMoney(client?.total)}
+    <article className="admin-order" data-status={client.estado}>
+      <button type="button" className="admin-order-details" onClick={onClick}
+        aria-label={`Ver pedido ${client?.id} de ${client?.nombre}`}>
+        <span className="admin-order-heading">
+          <strong>{client.id}</strong>
+          <span className="admin-order-sources" aria-label={`${fuentes} ${fuentes === 1 ? "fuente" : "fuentes"}`}>
+            <LuLayers aria-hidden="true" /> {fuentes}
+          </span>
         </span>
-        <span className="text-slate-300">•</span>
-        <span className={debe > 0 ? "text-orange-600" : "text-slate-500"}>
-          Debe: {formatMoney(debe)}
+        <span className="admin-order-name">{client.nombre}</span>
+        <span className="admin-order-meta">
+          <span>Total <strong>{formatMoney(client.total)}</strong></span>
+          <span>Saldo <strong className={debe > 0 ? "admin-order-balance" : undefined}>{formatMoney(debe)}</strong></span>
         </span>
-      </div>
+        {!showWhatsApp && <LuChevronRight className="admin-order-arrow" aria-hidden="true" />}
+      </button>
+      {showWhatsApp && (
+        <button type="button" className="admin-icon-button admin-order-whatsapp"
+          onClick={sendWhatsApp} aria-label={`Enviar WhatsApp del pedido ${client.id}`}>
+          <FontAwesomeIcon icon={faWhatsapp} aria-hidden="true" />
+        </button>
+      )}
     </article>
   );
 }

@@ -71,7 +71,7 @@ export default function PrintTicket({
             margin: 0,
           }}
         >
-          INV MOISES
+          INV SALAS
         </h1>
 
         <p

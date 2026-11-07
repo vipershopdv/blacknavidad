@@ -73,7 +73,7 @@ export default function Login({
 
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
-                Inv. Moisés
+                Inv. Salas
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-700">
                 Edición Navidad

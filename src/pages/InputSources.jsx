@@ -1,99 +1,39 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { LuCheck, LuClock, LuFlame, LuMinus, LuPlus, LuSave, LuSearch } from "react-icons/lu";
+import AdminConfirm from "../components/AdminConfirm";
+import AdminSection from "../layout/AdminSection";
 
-export default function InputSources({
-  clients,
-  updateFuentes,
-}) {
-  const [search, setSearch] =
-    useState("");
-
-  const sourceClients =
-    useMemo(() => {
-      const normalizedSearch =
-        search.trim().toLowerCase();
-
-      return clients
-        .filter(
-          (client) =>
-            client.estado ===
-              "espera" ||
-            client.estado ===
-              "listo"
-        )
-        .filter((client) => {
-          if (!normalizedSearch)
-            return true;
-
-          return String(client.id || "")
-            .toLowerCase()
-            .includes(normalizedSearch);
-        })
-        .sort((a, b) => {
-          const aCompleted =
-            (a.fuentesListas ?? 0) >=
-            a.fuentes;
-
-          const bCompleted =
-            (b.fuentesListas ?? 0) >=
-            b.fuentes;
-
-          return (
-            Number(aCompleted) -
-            Number(bCompleted)
-          );
-        });
-    }, [clients, search]);
-
-  const [changes, setChanges] =
-    useState({});
-
-  const [confirm, setConfirm] =
-    useState(false);
+export default function InputSources({ clients, updateFuentes }) {
+  const [search, setSearch] = useState("");
+  const [changes, setChanges] = useState({});
+  const [confirm, setConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState("");
+  const [error, setError] = useState("");
 
-  const handleAdd = (client) => {
-    const current =
-      changes[client.id] ??
-      client.fuentesListas ??
-      0;
+  const active = clients.filter(({ estado }) => estado === "espera" || estado === "listo");
+  const pending = active.filter((client) => changes[client.id] !== undefined && changes[client.id] !== client.fuentesListas);
+  const query = search.trim().toLowerCase();
+  const visible = active.filter(({ id }) => id.toLowerCase().includes(query))
+    .sort((a, b) => Number(a.fuentesListas >= a.fuentes) - Number(b.fuentesListas >= b.fuentes));
 
-    if (current >= client.fuentes)
-      return;
-
-    setChanges({
-      ...changes,
-      [client.id]:
-        current + 1,
+  const changeCount = (client, delta) => {
+    setChanges((current) => {
+      const baseline = client.fuentesListas ?? 0;
+      const next = Math.min(client.fuentes, Math.max(0, (current[client.id] ?? baseline) + delta));
+      const updated = { ...current };
+      if (next === baseline) delete updated[client.id];
+      else updated[client.id] = next;
+      return updated;
     });
   };
 
-  const handleRemove = (
-    client
-  ) => {
-    const current =
-      changes[client.id] ??
-      client.fuentesListas ??
-      0;
-
-    if (current <= 0) return;
-
-    setChanges({
-      ...changes,
-      [client.id]:
-        current - 1,
-    });
-  };
-
-  const handleSave = async () => {
+  const save = async () => {
     if (saving) return;
     setSaving(true);
-    setSaveError("");
+    setError("");
     try {
-      for (const client of sourceClients) {
-        const value = changes[client.id];
-        if (value === undefined) continue;
-        await updateFuentes(client.id, value, client.fuentes);
+      for (const client of pending) {
+        await updateFuentes(client.id, changes[client.id], client.fuentes);
         setChanges((current) => {
           const remaining = { ...current };
           delete remaining[client.id];
@@ -101,307 +41,68 @@ export default function InputSources({
         });
       }
       setConfirm(false);
-      setChanges({});
     } catch {
-      setSaveError("No se pudieron guardar todos los cambios. Revisa los pendientes.");
+      setError("No se pudieron guardar todos los cambios. Revisa los pendientes.");
     } finally {
       setSaving(false);
     }
   };
+
   return (
-    <>
-      {/* HEADER */}
-      <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-end">
-        <div>
-          <h2 className="text-2xl font-black text-slate-900">
-            INGRESAR
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Registra las fuentes que salen
-            del horno.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm">
-          <label className="mb-1 block px-1 text-xs font-bold text-slate-700">
-            Buscar ID
-          </label>
-
-          <input
-            type="text"
-            value={search}
-            onChange={(e) =>
-              setSearch(e.target.value)
-            }
-            placeholder="C-1"
-            className="
-              w-full
-              rounded-xl
-              border
-              border-slate-200
-              bg-slate-50
-              px-3
-              py-2.5
-              text-sm
-              font-bold
-              uppercase
-              text-slate-900
-              outline-none
-              placeholder:text-slate-400
-              focus:border-orange-300
-              focus:bg-white
-              focus:ring-4
-              focus:ring-orange-100
-            "
-          />
-        </div>
-      </div>
-
-      {/* GRID */}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {sourceClients.map(
-          (client) => {
-            const listas =
-              changes[
-                client.id
-              ] ??
-              client.fuentesListas ??
-              0;
-
-            const completed =
-              listas >=
-              client.fuentes;
-
+    <AdminSection title="Ingresar fuentes" actions={
+      <label className="admin-inline-search">
+        <LuSearch aria-hidden="true" />
+        <input type="search" aria-label="Buscar ID de pedido" placeholder="Buscar ID de pedido"
+          value={search} onChange={(event) => setSearch(event.target.value)} />
+      </label>
+    }>
+      {visible.length ? (
+        <ul className="admin-source-grid" role="list">
+          {visible.map((client) => {
+            const ready = changes[client.id] ?? client.fuentesListas ?? 0;
+            const done = ready >= client.fuentes;
+            const status = done ? "complete" : ready > 0 ? "progress" : "waiting";
+            const StatusIcon = done ? LuCheck : ready > 0 ? LuFlame : LuClock;
             return (
-              <div
-                key={
-                  client.id
-                }
-                className={`
-                  rounded-2xl
-                  border
-                  p-4
-                  shadow-sm
-                  transition-all
-
-                  ${
-                    completed
-                      ? "border-green-300 bg-green-50"
-                      : "border-slate-200 bg-white"
-                  }
-                `}
-              >
-                {/* COMPLETADO */}
-                {completed && (
-                  <div
-                    className="
-                      mb-3
-                      inline-flex
-                      items-center
-                      rounded-full
-                      bg-green-100
-                      px-3
-                      py-1
-                      text-xs
-                      font-black
-                      text-green-700
-                    "
-                  >
-                    ✓ COMPLETADO
+              <li key={client.id} className="admin-source-card" data-progress={status}>
+                <div className="admin-source-heading">
+                  <span className="admin-source-code">{client.id}</span>
+                  <span className="admin-source-status">
+                    <StatusIcon aria-hidden="true" /> {done ? "Completo" : ready > 0 ? "En proceso" : "Pendiente"}
+                  </span>
+                </div>
+                <p className="admin-source-name">{client.nombre}</p>
+                <div className="admin-source-controls">
+                  <div className="admin-source-progress">
+                    <span><strong>{ready}/{client.fuentes}</strong> listas</span>
+                    <progress value={ready} max={client.fuentes} aria-label={`Fuentes listas de ${client.id}`} />
                   </div>
-                )}
-
-                {/* TOP */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900">
-                      {client.id}
-                    </h3>
-
-                    <p className="text-sm text-slate-500">
-                      {
-                        client.fuentes
-                      }{" "}
-                      fuentes
-                    </p>
-                  </div>
-
-                  {/* BUTTONS */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        handleRemove(
-                          client
-                        )
-                      }
-                      className="
-                        flex
-                        h-10
-                        w-10
-                        items-center
-                        justify-center
-                        rounded-xl
-                        bg-slate-200
-                        text-lg
-                        font-black
-                        text-slate-700
-                      "
-                    >
-                      -
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        handleAdd(
-                          client
-                        )
-                      }
-                      className="
-                        flex
-                        h-10
-                        w-10
-                        items-center
-                        justify-center
-                        rounded-xl
-                        bg-green-500
-                        text-lg
-                        font-black
-                        text-white
-                      "
-                    >
-                      +
-                    </button>
+                  <div className="admin-stepper">
+                    <button type="button" className="admin-icon-button admin-source-minus"
+                      aria-label={`Restar una fuente a ${client.id}`} disabled={ready === 0}
+                      onClick={() => changeCount(client, -1)}><LuMinus aria-hidden="true" /></button>
+                    <button type="button" className="admin-icon-button admin-source-plus"
+                      aria-label={`Sumar una fuente a ${client.id}`} disabled={done}
+                      onClick={() => changeCount(client, 1)}><LuPlus aria-hidden="true" /></button>
                   </div>
                 </div>
-
-                {/* STATUS */}
-                <div className="mt-4">
-                  <p
-                    className={`
-                      text-base
-                      font-black
-
-                      ${
-                        completed
-                          ? "text-green-600"
-                          : listas > 0
-                          ? "text-orange-500"
-                          : "text-blue-600"
-                      }
-                    `}
-                  >
-                    {listas} /{" "}
-                    {
-                      client.fuentes
-                    }{" "}
-                    fuentes
-                  </p>
-                </div>
-              </div>
+              </li>
             );
-          }
-        )}
-      </div>
-
-      {/* BOTON */}
-      {Object.keys(changes)
-        .length > 0 && (
-        <div className="mt-8">
-          <button
-            onClick={() =>
-              setConfirm(true)
-            }
-            className="
-              w-full
-              rounded-3xl
-              bg-orange-500
-              px-6
-              py-4
-              text-lg
-              font-black
-              text-white
-            "
-          >
-            Guardar cambios
-          </button>
-        </div>
-      )}
-
-      {/* CONFIRM */}
-      {confirm && (
-        <div
-          className="
-            fixed
-            inset-0
-            z-50
-            flex
-            items-center
-            justify-center
-            bg-black/30
-            p-4
-          "
-        >
-          <div
-            className="
-              w-full
-              max-w-md
-              rounded-3xl
-              bg-white
-              p-6
-            "
-          >
-            <h3 className="text-2xl font-black text-slate-900">
-              Confirmación
-            </h3>
-
-            <p className="mt-3 text-slate-600">
-              ¿Seguro que deseas
-              actualizar las fuentes
-              listas?
-            </p>
-
-            {saveError && <p role="alert" className="mt-3 text-sm text-red-700">{saveError}</p>}
-            <div className="mt-6 flex gap-3">
-              <button
-                disabled={saving}
-                onClick={() =>
-                  setConfirm(false)
-                }
-                className="
-                  flex-1
-                  rounded-2xl
-                  bg-slate-100
-                  px-5
-                  py-3
-                  font-bold
-                  text-slate-700
-                "
-              >
-                Cancelar
-              </button>
-
-              <button
-                disabled={saving}
-                onClick={
-                  handleSave
-                }
-                className="
-                  flex-1
-                  rounded-2xl
-                  bg-orange-500
-                  px-5
-                  py-3
-                  font-bold
-                  text-white
-                "
-              >
-                {saving ? "Guardando..." : "Confirmar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+          })}
+        </ul>
+      ) : <p className="admin-page-body admin-empty-text">{query ? "No se encontraron pedidos con ese ID." : "No hay pedidos para actualizar."}</p>}
+      <footer className="admin-page-actions">
+        {pending.length > 0 && <span className="admin-action-note">{pending.length} {pending.length === 1 ? "pedido con cambios" : "pedidos con cambios"}</span>}
+        <button type="button" className="admin-button admin-button-primary" disabled={!pending.length}
+          onClick={() => { setError(""); setConfirm(true); }}>
+          <LuSave aria-hidden="true" /> Guardar cambios
+        </button>
+      </footer>
+      {confirm && <AdminConfirm title="Guardar fuentes listas" icon={LuSave}
+        confirmLabel={saving ? "Guardando..." : "Guardar"} busy={saving} error={error}
+        onCancel={() => setConfirm(false)} onConfirm={save}>
+        Se actualizarán las fuentes listas de {pending.length} {pending.length === 1 ? "pedido" : "pedidos"}.
+      </AdminConfirm>}
+    </AdminSection>
   );
 }
