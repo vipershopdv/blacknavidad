@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { LuCircleCheck, LuClock3, LuCookingPot, LuHash, LuLoaderCircle, LuPackageCheck, LuSearch } from "react-icons/lu";
 
 import { getClientByCode } from "../supabase/clients";
 import PublicClientModal from "../components/PublicClientModal";
+import { isOrderNumber, normalizeOrderNumber } from "../data/orderLink";
 
 const stages = [
   { key: "waiting", icon: LuClock3, label: "En espera", description: "Aún no está listo para recoger." },
@@ -11,31 +12,20 @@ const stages = [
   { key: "delivered", icon: LuPackageCheck, label: "Entregado", description: "El pedido ya fue retirado." },
 ];
 
-const normalizeCode = (value = "") => {
-  const raw = String(value).trim().toUpperCase().replace(/\s+/g, "");
-
-  if (!raw) return "";
-  if (/^C-\d+$/.test(raw)) return raw;
-  if (/^C\d+$/.test(raw)) return `C-${raw.slice(1)}`;
-  if (/^\d+$/.test(raw)) return `C-${raw}`;
-  return raw;
-};
-
 export default function PublicHome() {
-  const [serviceId, setServiceId] = useState("");
+  const [linkedOrder] = useState(() => new URLSearchParams(window.location.search).get("pedido"));
+  const [serviceId, setServiceId] = useState(() => normalizeOrderNumber(linkedOrder));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [client, setClient] = useState(null);
   const [openModal, setOpenModal] = useState(false);
   const pending = useRef(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (pending.current) return;
+  const lookupOrder = useCallback(async (value, signal) => {
+    if (pending.current || signal?.aborted) return;
+    const code = normalizeOrderNumber(value);
 
-    const code = normalizeCode(serviceId);
-
-    if (!/^C-\d{1,19}$/.test(code)) {
+    if (!isOrderNumber(code)) {
       setError("Ingresa un número de pedido como C-8.");
       return;
     }
@@ -45,7 +35,8 @@ export default function PublicHome() {
     setError("");
 
     try {
-      const result = await getClientByCode(code);
+      const result = await getClientByCode(code, signal);
+      if (signal?.aborted) return;
 
       if (!result) {
         setClient(null);
@@ -57,11 +48,26 @@ export default function PublicHome() {
       setClient(result);
       setOpenModal(true);
     } catch {
-      setError("No pudimos consultar el pedido. Revisa tu conexión e inténtalo de nuevo.");
+      if (!signal?.aborted) {
+        setError("No pudimos consultar el pedido. Revisa tu conexión e inténtalo de nuevo.");
+      }
     } finally {
       pending.current = false;
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (linkedOrder === null) return;
+    const controller = new AbortController();
+    // Defer until after effect setup so Strict Mode can cancel its initial pass.
+    queueMicrotask(() => { void lookupOrder(linkedOrder, controller.signal); });
+    return () => controller.abort();
+  }, [linkedOrder, lookupOrder]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    void lookupOrder(serviceId);
   };
 
   const closeModal = () => {

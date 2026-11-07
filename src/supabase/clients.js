@@ -63,8 +63,11 @@ export const listenClients = (onData, onError) => {
   };
 };
 
-export const getClientByCode = async (code) => {
+export const getClientByCode = async (code, signal) => {
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) controller.abort();
   const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
   try {
     const row = unwrap(await supabase.rpc("lookup_order_status", { p_code: code })
@@ -72,6 +75,7 @@ export const getClientByCode = async (code) => {
     return row ? toClient(row) : null;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
   }
 };
 

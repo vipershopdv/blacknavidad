@@ -41,7 +41,12 @@ export default function App() {
       setLoading(false);
 
       if (isAdmin(user)) {
-        setView((current) => event === "INITIAL_SESSION" || current === "login" ? "admin" : current);
+        setView((current) => {
+          if (event === "INITIAL_SESSION") {
+            return new URLSearchParams(window.location.search).has("pedido") ? "public" : "admin";
+          }
+          return current === "login" ? "admin" : current;
+        });
       } else {
         setClients([]);
         setClientsLoaded(false);

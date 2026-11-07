@@ -1,4 +1,6 @@
-import { formatMoney } from "./orderDisplay";
+import QRCode from "qrcode";
+import { formatMoney } from "./orderDisplay.js";
+import { getOrderLink, ORDER_PORTAL_URL } from "./orderLink.js";
 
 const escapeHtml = (value = "") =>
   String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -6,6 +8,17 @@ const escapeHtml = (value = "") =>
   })[char]);
 
 export const buildPrintHTML = (client) => {
+  const orderLink = getOrderLink(client.id);
+  const { modules } = QRCode.create(orderLink, { errorCorrectionLevel: "M" });
+  const margin = 4;
+  const qrSize = modules.size + margin * 2;
+  const path = [];
+  for (let y = 0; y < modules.size; y++) {
+    for (let x = 0; x < modules.size; x++) {
+      if (modules.get(y, x)) path.push(`M${x + margin} ${y + margin}h1v1h-1z`);
+    }
+  }
+  const qr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${qrSize} ${qrSize}" role="img" aria-label="QR del pedido ${escapeHtml(client.id)}" shape-rendering="crispEdges"><rect width="${qrSize}" height="${qrSize}" fill="#fff"/><path d="${path.join("")}" fill="#000"/></svg>`;
   const printedAt = new Intl.DateTimeFormat("es-PE", {
     dateStyle: "short", timeStyle: "short", timeZone: "America/Lima",
   }).format(new Date());
@@ -38,6 +51,10 @@ export const buildPrintHTML = (client) => {
     footer p + p { margin-top: 4px; }
     .lookup-box { margin-top: 9px; border: 1px solid #333; padding: 5px 6px; font-size: 10px; }
     .lookup-url { display: block; margin-top: 2px; overflow-wrap: anywhere; }
+    .ticket-qr { margin: 9px 0 0; border-top: 1px dashed #444; padding-top: 6px; text-align: center; break-inside: avoid; }
+    .ticket-qr figcaption { font-size: 10px; }
+    .ticket-qr a { display: block; width: 32mm; margin: 3px auto 0; line-height: 0; }
+    .ticket-qr svg { display: block; width: 100%; height: auto; }
   </style>
 </head>
 <body>
@@ -48,7 +65,7 @@ export const buildPrintHTML = (client) => {
   </header>
   <div class="lookup-box">
     Consulta el estado de tus fuentes en
-    <strong class="lookup-url">blacknavidad-nine.vercel.app</strong>
+    <strong class="lookup-url">${escapeHtml(new URL(ORDER_PORTAL_URL).hostname)}</strong>
   </div>
   <div class="order-number">Número de pedido <strong>${escapeHtml(client.id)}</strong></div>
   <dl>
@@ -64,6 +81,10 @@ export const buildPrintHTML = (client) => {
   <footer>
     <p>Emitido: ${escapeHtml(printedAt)}</p>
   </footer>
+  <figure class="ticket-qr">
+    <figcaption>Escanea para ver el estado de tu pedido</figcaption>
+    <a href="${escapeHtml(orderLink)}">${qr}</a>
+  </figure>
 </body>
 </html>`;
 };
@@ -79,15 +100,7 @@ export const printClientTicket = (client) => {
   iframe.style.border = "0";
   iframe.style.opacity = "0";
 
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow.document;
-
-  doc.open();
-  doc.write(buildPrintHTML(client));
-  doc.close();
-
-  iframe.onload = () => {
+  iframe.addEventListener("load", () => {
     setTimeout(() => {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
@@ -98,5 +111,7 @@ export const printClientTicket = (client) => {
         }
       }, 1000);
     }, 300);
-  };
+  }, { once: true });
+  iframe.srcdoc = buildPrintHTML(client);
+  document.body.appendChild(iframe);
 };
